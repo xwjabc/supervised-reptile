@@ -34,7 +34,8 @@ def train(sess,
           transductive=False,
           reptile_fn=Reptile,
           log_fn=print,
-          gradagree=False):
+          gradagree=False,
+          sum_w_i_g_i=False):
     """
     Train a model on a dataset.
     """
@@ -58,7 +59,8 @@ def train(sess,
                            num_classes=num_classes, num_shots=(train_shots or num_shots),
                            inner_batch_size=inner_batch_size, inner_iters=inner_iters,
                            replacement=replacement,
-                           meta_step_size=cur_meta_step_size, meta_batch_size=meta_batch_size, gradagree=gradagree)
+                           meta_step_size=cur_meta_step_size, meta_batch_size=meta_batch_size,
+                           gradagree=gradagree, sum_w_i_g_i=sum_w_i_g_i)
         if i % eval_interval == 0:
             accuracies = []
             for dataset, writer in [(train_set, train_writer), (test_set, test_writer)]:

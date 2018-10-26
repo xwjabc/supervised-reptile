@@ -42,7 +42,8 @@ class Reptile:
                    replacement,
                    meta_step_size,
                    meta_batch_size,
-                   gradagree):
+                   gradagree,
+                   sum_w_i_g_i):
         """
         Perform a Reptile training step.
 
@@ -62,6 +63,7 @@ class Reptile:
           meta_step_size: interpolation coefficient.
           meta_batch_size: how many inner-loops to run.
           gradagree: enable gradient agreement.
+          sum_w_i_g_i: sum w_i*g_i instead of average them.
         """
         old_vars = self._model_state.export_variables()
         new_vars = []
@@ -111,10 +113,12 @@ class Reptile:
                 w_i_list.append(w_i)
                 w_i_g_i_list.append(scale_vars(g_i_list[i], w_i))      # w_i * g_i
             w_i_g_i_avg = average_vars(w_i_g_i_list)                   # FIXME: Multiply with meta_step_size or not?
-            self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg,
-                                                                                  meta_step_size)))
-            # self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg, # FIXME: Alternative.
-            #                                                                       meta_step_size * meta_batch_size)))
+            if sum_w_i_g_i is False:
+                self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg,
+                                                                                      meta_step_size)))
+            else:
+                self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg,  # FIXME: Alternative.
+                                                                                    meta_step_size * meta_batch_size)))
 
             print('denominator: {}, w_i_max: {}, w_i_min: {}'.format(denominator, max(w_i_list), min(w_i_list)))
 
