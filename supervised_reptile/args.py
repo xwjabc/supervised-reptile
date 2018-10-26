@@ -42,6 +42,7 @@ def argument_parser():
     parser.add_argument('--sgd', help='use vanilla SGD instead of Adam', action='store_true')
     parser.add_argument('--gradagree', help='use gradient agreement', action='store_true')
     parser.add_argument('--sum_w_i_g_i', help='sum w_i*g_i instead of average them', action='store_true')
+    parser.add_argument('--renorm', help='use batch renormalization in mini-ImageNet model', action='store_true')
     return parser
 
 def model_kwargs(parsed_args):
@@ -52,6 +53,8 @@ def model_kwargs(parsed_args):
     res = {'learning_rate': parsed_args.learning_rate}
     if parsed_args.sgd:
         res['optimizer'] = tf.train.GradientDescentOptimizer
+    if parsed_args.renorm:
+        res['renorm'] = True
     return res
 
 def train_kwargs(parsed_args):
