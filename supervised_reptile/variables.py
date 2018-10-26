@@ -5,6 +5,15 @@ Tools for manipulating sets of variables.
 import numpy as np
 import tensorflow as tf
 
+def dot_vars(var_seq_1, var_seq_2):
+    """
+    Dot-product between two sequences of variables (equivalent to element-wise product + sum).
+    """
+    res = 0
+    for v1, v2 in zip(var_seq_1, var_seq_2):
+        res += (v1 * v2).sum()
+    return res
+
 def interpolate_vars(old_vars, new_vars, epsilon):
     """
     Interpolate between two sequences of variables.

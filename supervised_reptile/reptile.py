@@ -7,8 +7,10 @@ import random
 
 import tensorflow as tf
 
-from .variables import (interpolate_vars, average_vars, subtract_vars, add_vars, scale_vars,
+from .variables import (dot_vars, interpolate_vars, average_vars, subtract_vars, add_vars, scale_vars,
                         VariableState)
+
+import numpy as np
 
 class Reptile:
     """
@@ -17,7 +19,7 @@ class Reptile:
     Reptile can operate in two evaluation modes: normal
     and transductive. In transductive mode, information is
     allowed to leak between test samples via BatchNorm.
-    Typically, MAML is used in a transductive manner.
+    Typically, MAML is used in a transductive manner.  FIXME: Understand the transductive setting here.
     """
     def __init__(self, session, variables=None, transductive=False, pre_step_op=None):
         self.session = session
@@ -25,7 +27,7 @@ class Reptile:
         self._full_state = VariableState(self.session,
                                          tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
         self._transductive = transductive
-        self._pre_step_op = pre_step_op
+        self._pre_step_op = pre_step_op  # FIXME: What is the pre_step_op?
 
     # pylint: disable=R0913,R0914
     def train_step(self,
@@ -64,14 +66,54 @@ class Reptile:
         for _ in range(meta_batch_size):
             mini_dataset = _sample_mini_dataset(dataset, num_classes, num_shots)
             for batch in _mini_batches(mini_dataset, inner_batch_size, inner_iters, replacement):
-                inputs, labels = zip(*batch)
+                inputs, labels = zip(*batch)  # Interesting use of zip().
                 if self._pre_step_op:
                     self.session.run(self._pre_step_op)
                 self.session.run(minimize_op, feed_dict={input_ph: inputs, label_ph: labels})
             new_vars.append(self._model_state.export_variables())
-            self._model_state.import_variables(old_vars)
-        new_vars = average_vars(new_vars)
-        self._model_state.import_variables(interpolate_vars(old_vars, new_vars, meta_step_size))
+            self._model_state.import_variables(old_vars)  # Restore to old_vars (old state).
+
+        GRADAGREE = True
+        if GRADAGREE is False:
+            new_vars = average_vars(new_vars)  # Average over all new_vars theta^\tilde_i.
+            self._model_state.import_variables(interpolate_vars(old_vars, new_vars, meta_step_size))
+            #   old_vars + meta_step_size * (new_vars - old_vars)
+            # = (1 - meta_step_size) * old_vars + meta_step_size * new_vars
+        else:
+            # I. Naive implementation.
+            # sum_j_in_T_gi_gj_list = []
+            # for i in range(meta_batch_size):
+            #     sum_j_in_T_gi_gj = 0
+            #     for j in range(meta_batch_size):
+            #         sum_j_in_T_gi_gj += dot_vars(subtract_vars(new_vars[i], old_vars),
+            #                                      subtract_vars(new_vars[j], old_vars))
+            #         # FIXME: First sum then multiply may get better performance.
+            #     sum_j_in_T_gi_gj_list.append(sum_j_in_T_gi_gj)
+            # denominator = np.sum(np.abs(np.array(sum_j_in_T_gi_gj_list)))
+            # w_i_list = []
+            # for i in range(meta_batch_size):
+            #     w_i_list[i] = sum_j_in_T_gi_gj_list[i] / denominator
+
+            # II. Slight better implementation.
+            g_i_list = []
+            for i in range(meta_batch_size):
+                g_i_list.append(subtract_vars(old_vars, new_vars[i]))  # g_i = theta - theta_i
+            g_avg = average_vars(g_i_list)                             # g_avg
+            g_i_g_avg_list = []
+            for i in range(meta_batch_size):
+                g_i_g_avg_list.append(dot_vars(g_i_list[i], g_avg))    # g_i.dot(g_avg)
+            denominator = np.sum(np.abs(g_i_g_avg_list))               # denominator = sum_i |g_i.dot(g_avg)|
+            w_i_g_i_list = []
+            for i in range(meta_batch_size):
+                w_i = g_i_g_avg_list[i] / denominator                  # w_i = g_i.dot(g_avg) / denominator
+                w_i_g_i_list.append(scale_vars(g_i_list[i], w_i))      # w_i * g_i
+
+            w_i_g_i_avg = average_vars(w_i_g_i_list)                   # FIXME: Multiply with meta_step_size or not?
+            self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg,
+                                                                                  meta_step_size)))
+            # self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg, # FIXME: Alternative.
+            #                                                                       meta_step_size * meta_batch_size)))
+
 
     def evaluate(self,
                  dataset,
@@ -110,7 +152,7 @@ class Reptile:
             This always ranges from 0 to num_classes.
         """
         train_set, test_set = _split_train_test(
-            _sample_mini_dataset(dataset, num_classes, num_shots+1))
+            _sample_mini_dataset(dataset, num_classes, num_shots+1))  # Add one example for test.
         old_vars = self._full_state.export_variables()
         for batch in _mini_batches(train_set, inner_batch_size, inner_iters, replacement):
             inputs, labels = zip(*batch)
@@ -124,12 +166,14 @@ class Reptile:
 
     def _test_predictions(self, train_set, test_set, input_ph, predictions):
         if self._transductive:
+            # FIXME: I wonder if information leak really happens? If it is, it means the batch normalization
+            # FIXME: is not set as evaluation mode during test prediction? Need to take a deeper look at it.
             inputs, _ = zip(*test_set)
             return self.session.run(predictions, feed_dict={input_ph: inputs})
         res = []
         for test_sample in test_set:
             inputs, _ = zip(*train_set)
-            inputs += (test_sample[0],)
+            inputs += (test_sample[0],)  # test mini-batch = train set + one test example (to avoid info. leak).
             res.append(self.session.run(predictions, feed_dict={input_ph: inputs})[-1])
         return res
 
@@ -158,7 +202,7 @@ class FOML(Reptile):
           args: args for Reptile.
           tail_shots: if specified, this is the number of
             examples per class to reserve for the final
-            mini-batch.
+            mini-batch. FIXME: Why are there examples for the final mini-batch?
           kwargs: kwargs for Reptile.
         """
         super(FOML, self).__init__(*args, **kwargs)
@@ -231,7 +275,7 @@ def _mini_batches(samples, batch_size, num_batches, replacement):
     samples = list(samples)
     if replacement:
         for _ in range(num_batches):
-            yield random.sample(samples, batch_size)
+            yield random.sample(samples, batch_size)  # Allow replacement.
         return
     cur_batch = []
     batch_count = 0
@@ -239,7 +283,7 @@ def _mini_batches(samples, batch_size, num_batches, replacement):
         random.shuffle(samples)
         for sample in samples:
             cur_batch.append(sample)
-            if len(cur_batch) < batch_size:
+            if len(cur_batch) < batch_size:  # Make the mini-batch have unique samples.
                 continue
             yield cur_batch
             cur_batch = []
@@ -262,14 +306,14 @@ def _split_train_test(samples, test_shots=1):
     """
     train_set = list(samples)
     test_set = []
-    labels = set(item[1] for item in train_set)
+    labels = set(item[1] for item in train_set)  # Get set of labels.
     for _ in range(test_shots):
         for label in labels:
             for i, item in enumerate(train_set):
                 if item[1] == label:
                     del train_set[i]
                     test_set.append(item)
-                    break
+                    break  # Get one example, move it from training set to test set, and then break.
     if len(test_set) < len(labels) * test_shots:
         raise IndexError('not enough examples of each class for test set')
     return train_set, test_set

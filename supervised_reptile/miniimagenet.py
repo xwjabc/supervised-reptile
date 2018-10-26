@@ -31,7 +31,7 @@ def _read_classes(dir_path):
     Read the WNID directories in a directory.
     """
     return [ImageNetClass(os.path.join(dir_path, f)) for f in os.listdir(dir_path)
-            if f.startswith('n')]
+            if f.startswith('n')]  # The index of the list indicates the class.
 
 # pylint: disable=R0903
 class ImageNetClass:
@@ -58,9 +58,9 @@ class ImageNetClass:
         return images
 
     def _read_image(self, name):
-        if name in self._cache:
+        if name in self._cache:  # Read uint8 image from cache and normalize it to [0,1] with float32 format.
             return self._cache[name].astype('float32') / 0xff
-        with open(os.path.join(self.dir_path, name), 'rb') as in_file:
+        with open(os.path.join(self.dir_path, name), 'rb') as in_file:  # Save uint8 images into cache.
             img = Image.open(in_file).resize((84, 84)).convert('RGB')
             self._cache[name] = np.array(img)
             return self._read_image(name)
