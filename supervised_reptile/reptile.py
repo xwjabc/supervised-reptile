@@ -103,17 +103,19 @@ class Reptile:
             for i in range(meta_batch_size):
                 g_i_g_avg_list.append(dot_vars(g_i_list[i], g_avg))    # g_i.dot(g_avg)
             denominator = np.sum(np.abs(g_i_g_avg_list))               # denominator = sum_i |g_i.dot(g_avg)|
+            w_i_list = []
             w_i_g_i_list = []
             for i in range(meta_batch_size):
                 w_i = g_i_g_avg_list[i] / denominator                  # w_i = g_i.dot(g_avg) / denominator
+                w_i_list.append(w_i)
                 w_i_g_i_list.append(scale_vars(g_i_list[i], w_i))      # w_i * g_i
-
             w_i_g_i_avg = average_vars(w_i_g_i_list)                   # FIXME: Multiply with meta_step_size or not?
             self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg,
                                                                                   meta_step_size)))
             # self._model_state.import_variables(subtract_vars(old_vars, scale_vars(w_i_g_i_avg, # FIXME: Alternative.
             #                                                                       meta_step_size * meta_batch_size)))
 
+            print('denominator: {}, w_i_max: {}, w_i_min: {}'.format(denominator, max(w_i_list), min(w_i_list)))
 
     def evaluate(self,
                  dataset,
