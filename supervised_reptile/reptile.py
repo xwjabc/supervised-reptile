@@ -41,7 +41,8 @@ class Reptile:
                    inner_iters,
                    replacement,
                    meta_step_size,
-                   meta_batch_size):
+                   meta_batch_size,
+                   gradagree):
         """
         Perform a Reptile training step.
 
@@ -60,6 +61,7 @@ class Reptile:
           replacement: sample with replacement.
           meta_step_size: interpolation coefficient.
           meta_batch_size: how many inner-loops to run.
+          gradagree: enable gradient agreement.
         """
         old_vars = self._model_state.export_variables()
         new_vars = []
@@ -73,8 +75,7 @@ class Reptile:
             new_vars.append(self._model_state.export_variables())
             self._model_state.import_variables(old_vars)  # Restore to old_vars (old state).
 
-        GRADAGREE = True
-        if GRADAGREE is False:
+        if gradagree is False:
             new_vars = average_vars(new_vars)  # Average over all new_vars theta^\tilde_i.
             self._model_state.import_variables(interpolate_vars(old_vars, new_vars, meta_step_size))
             #   old_vars + meta_step_size * (new_vars - old_vars)

@@ -33,13 +33,14 @@ def train(sess,
           train_shots=None,
           transductive=False,
           reptile_fn=Reptile,
-          log_fn=print):
+          log_fn=print,
+          gradagree=False):
     """
     Train a model on a dataset.
     """
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep=1000)
     reptile = reptile_fn(sess,
                          transductive=transductive,
                          pre_step_op=weight_decay(weight_decay_rate))
@@ -57,7 +58,7 @@ def train(sess,
                            num_classes=num_classes, num_shots=(train_shots or num_shots),
                            inner_batch_size=inner_batch_size, inner_iters=inner_iters,
                            replacement=replacement,
-                           meta_step_size=cur_meta_step_size, meta_batch_size=meta_batch_size)
+                           meta_step_size=cur_meta_step_size, meta_batch_size=meta_batch_size, gradagree=gradagree)
         if i % eval_interval == 0:
             accuracies = []
             for dataset, writer in [(train_set, train_writer), (test_set, test_writer)]:

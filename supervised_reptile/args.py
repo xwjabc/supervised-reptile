@@ -40,6 +40,7 @@ def argument_parser():
     parser.add_argument('--foml-tail', help='number of shots for the final mini-batch in FOML',
                         default=None, type=int)
     parser.add_argument('--sgd', help='use vanilla SGD instead of Adam', action='store_true')
+    parser.add_argument('--gradagree', help='use gradient agreement', action='store_true')
     return parser
 
 def model_kwargs(parsed_args):
@@ -73,7 +74,8 @@ def train_kwargs(parsed_args):
         'eval_interval': parsed_args.eval_interval,
         'weight_decay_rate': parsed_args.weight_decay,
         'transductive': parsed_args.transductive,
-        'reptile_fn': _args_reptile(parsed_args)
+        'reptile_fn': _args_reptile(parsed_args),
+        'gradagree': parsed_args.gradagree
     }
 
 def evaluate_kwargs(parsed_args):
