@@ -37,6 +37,7 @@ class MiniImageNetModel:
     def __init__(self, num_classes, optimizer=DEFAULT_OPTIMIZER, renorm=False, **optim_kwargs):
         self.input_ph = tf.placeholder(tf.float32, shape=(None, 84, 84, 3))
         out = self.input_ph
+        print('renorm status: {}'.format(renorm))
         for _ in range(4):
             out = tf.layers.conv2d(out, 32, 3, padding='same')
             out = tf.layers.batch_normalization(out, renorm=renorm, training=True)  # FIXME: Training is always true!
